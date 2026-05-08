@@ -421,9 +421,37 @@
           byDay.set(day, row);
         }
         const rows = [...byDay.values()].sort((a, b) => b.day.localeCompare(a.day)).slice(0, 10);
-        document.getElementById("historyBody").innerHTML = rows.map((r) =>
-          `<tr><td>${r.day}</td><td>${r.count}</td><td>${r.burn.toFixed(3)}</td><td>${(r.burn / r.count).toFixed(3)}</td></tr>`
-        ).join("") || `<tr><td colspan="4" class="tiny">Not enough data yet.</td></tr>`;
+        const historyBody = document.getElementById("historyBody");
+        historyBody.textContent = "";
+
+        if (!rows.length) {
+          const tr = document.createElement("tr");
+          const td = document.createElement("td");
+          td.colSpan = 4;
+          td.className = "tiny";
+          td.textContent = "Not enough data yet.";
+          tr.appendChild(td);
+          historyBody.appendChild(tr);
+          return;
+        }
+
+        rows.forEach((r) => {
+          const tr = document.createElement("tr");
+          const values = [
+            r.day,
+            String(r.count),
+            r.burn.toFixed(3),
+            (r.burn / r.count).toFixed(3)
+          ];
+
+          values.forEach((value) => {
+            const td = document.createElement("td");
+            td.textContent = value;
+            tr.appendChild(td);
+          });
+
+          historyBody.appendChild(tr);
+        });
       }
 
       function drawChart(hourly) {
