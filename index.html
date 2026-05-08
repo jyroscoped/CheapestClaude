@@ -224,9 +224,15 @@
 
     <script>
       const STORAGE_KEY = "cheapestclaude.events.v1";
+      const SUNDAY = 0;
+      const SATURDAY = 6;
+      // Directional MVP assumption: local weekday business hours are usually busiest.
       const PEAK_HOURS = new Set([9, 10, 11, 12, 13, 14, 15, 16, 17]);
+      // Small prompts still have overhead; floor avoids unrealistically tiny burn estimates.
       const MIN_TOKEN_FLOOR = 120;
+      // Burn estimate is normalized per 1k tokens for easier comparison.
       const TOKEN_NORMALIZER = 1000;
+      // Confidence reaches 100% once an hour has at least 5 observed samples.
       const FULL_CONFIDENCE_SAMPLE_COUNT = 5;
       const events = loadEvents();
 
@@ -252,7 +258,7 @@
       }
 
       function isPeak(date) {
-        return date.getDay() > 0 && date.getDay() < 6 && PEAK_HOURS.has(date.getHours());
+        return date.getDay() > SUNDAY && date.getDay() < SATURDAY && PEAK_HOURS.has(date.getHours());
       }
 
       function estimateBurn({ timestamp, model, estimatedTokens, peakFlag, burnScore }) {
