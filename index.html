@@ -298,12 +298,32 @@
         }).filter((e) => e !== null).filter((e) => !Number.isNaN(new Date(e.timestamp).getTime()));
       }
 
+      function getEventDedupKey({ timestamp, sessionId, model, estimatedTokens }) {
+        return [
+          String(timestamp || ""),
+          String(sessionId || ""),
+          String(model || ""),
+          String(Number(estimatedTokens) || 0),
+        ].join("|");
+      }
+
+      function mergeUniqueEvents(existingEvents, incomingEvents) {
+        const seen = new Set(existingEvents.map((event) => getEventDedupKey(event)));
+        incomingEvents.forEach((event) => {
+          const key = getEventDedupKey(event);
+          if (seen.has(key)) return;
+          seen.add(key);
+          existingEvents.push(event);
+        });
+      }
+
       function onCsvUpload(e) {
         const file = e.target.files[0];
         if (!file) return;
         const reader = new FileReader();
         reader.onload = () => {
-          events.push(...parseCsv(String(reader.result)));
+          const importedEvents = parseCsv(String(reader.result));
+          mergeUniqueEvents(events, importedEvents);
           events.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
           persist();
           render();
