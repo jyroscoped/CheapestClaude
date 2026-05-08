@@ -5,7 +5,7 @@ Claude users do not have a simple, visual way to know when their session burn wi
 
 This repository now includes a lightweight single-page web app at:
 
-- `/home/runner/work/CheapestClaude/CheapestClaude/index.html`
+- `index.html`
 
 ### Features
 

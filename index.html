@@ -160,6 +160,7 @@
             CSV columns: timestamp, timezone, session_id, model, estimated_tokens,
             peak_flag, burn_score
           </p>
+          <p class="tiny">Peak/off-peak defaults use your local timezone and weekdays 9:00-17:59 as peak.</p>
           <div class="row">
             <input id="manualTokens" type="number" min="1" placeholder="tokens" />
             <select id="manualModel">
@@ -224,6 +225,9 @@
     <script>
       const STORAGE_KEY = "cheapestclaude.events.v1";
       const PEAK_HOURS = new Set([9, 10, 11, 12, 13, 14, 15, 16, 17]);
+      const MIN_TOKEN_FLOOR = 120;
+      const TOKEN_NORMALIZER = 1000;
+      const FULL_CONFIDENCE_SAMPLE_COUNT = 5;
       const events = loadEvents();
 
       document.getElementById("csvFile").addEventListener("change", onCsvUpload);
@@ -257,7 +261,7 @@
         }
         const dt = new Date(timestamp);
         const peak = typeof peakFlag === "boolean" ? peakFlag : isPeak(dt);
-        const tokenPart = Math.max(estimatedTokens || 0, 120) / 1000;
+        const tokenPart = Math.max(estimatedTokens || 0, MIN_TOKEN_FLOOR) / TOKEN_NORMALIZER;
         const peakPart = peak ? 1.4 : 0.8;
         return Number((tokenPart * peakPart * modelMultiplier(model)).toFixed(3));
       }
@@ -321,7 +325,7 @@
         return byHour.map((h) => ({
           ...h,
           avg: h.count ? h.total / h.count : null,
-          confidence: Math.min(1, h.count / 5),
+          confidence: Math.min(1, h.count / FULL_CONFIDENCE_SAMPLE_COUNT),
         }));
       }
 
