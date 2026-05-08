@@ -415,8 +415,9 @@
         for (const e of events) {
           const day = new Date(e.timestamp).toISOString().slice(0, 10);
           const row = byDay.get(day) || { day, count: 0, burn: 0 };
+          const burn = e.burnScore != null ? Number(e.burnScore) : estimateBurn(e);
           row.count += 1;
-          row.burn += Number(e.burnScore || 0);
+          row.burn += burn;
           byDay.set(day, row);
         }
         const rows = [...byDay.values()].sort((a, b) => b.day.localeCompare(a.day)).slice(0, 10);
