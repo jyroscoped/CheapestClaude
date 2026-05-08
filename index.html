@@ -479,9 +479,22 @@
         recEl.textContent = recommendation.text;
         recEl.className = `status ${recommendation.cls}`;
         document.getElementById("confidenceText").textContent = `Confidence: ${confidence > 0.65 ? "high" : confidence > 0.35 ? "medium" : "low"} (${Math.round(confidence * 100)}%)`;
-        document.getElementById("upcoming").innerHTML = upcoming.map((w) =>
-          `<li><strong>${w.label}</strong> — est burn ${w.avg.toFixed(3)} (confidence ${Math.round(w.confidence * 100)}%)</li>`
-        ).join("") || "<li>No low-burn window predicted yet.</li>";
+        const upcomingEl = document.getElementById("upcoming");
+        upcomingEl.replaceChildren();
+        if (!upcoming.length) {
+          const li = document.createElement("li");
+          li.textContent = "No low-burn window predicted yet.";
+          upcomingEl.appendChild(li);
+        } else {
+          upcoming.forEach((w) => {
+            const li = document.createElement("li");
+            const strong = document.createElement("strong");
+            strong.textContent = w.label;
+            li.appendChild(strong);
+            li.appendChild(document.createTextNode(` — est burn ${w.avg.toFixed(3)} (confidence ${Math.round(w.confidence * 100)}%)`));
+            upcomingEl.appendChild(li);
+          });
+        }
         document.getElementById("chartCaption").textContent = events.length
           ? "Green bars indicate cheapest predicted windows."
           : "No usage data yet. Import CSV or log prompts.";
