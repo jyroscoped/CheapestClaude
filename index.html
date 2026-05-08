@@ -375,11 +375,39 @@
       function renderTimeline() {
         const body = document.getElementById("timelineBody");
         const recent = [...events].reverse().slice(0, 40);
-        body.innerHTML = recent.map((e) => {
+        body.replaceChildren();
+
+        if (!recent.length) {
+          const row = document.createElement("tr");
+          const cell = document.createElement("td");
+          cell.colSpan = 5;
+          cell.className = "tiny";
+          cell.textContent = "No events yet.";
+          row.appendChild(cell);
+          body.appendChild(row);
+          return;
+        }
+
+        for (const e of recent) {
           const d = new Date(e.timestamp);
           const peak = typeof e.peakFlag === "boolean" ? e.peakFlag : isPeak(d);
-          return `<tr><td>${d.toLocaleString()}</td><td>${e.model}</td><td>${e.estimatedTokens || "-"}</td><td>${peak ? "Peak" : "Off"}</td><td>${Number(e.burnScore).toFixed(3)}</td></tr>`;
-        }).join("") || `<tr><td colspan="5" class="tiny">No events yet.</td></tr>`;
+          const row = document.createElement("tr");
+          const values = [
+            d.toLocaleString(),
+            e.model ?? "",
+            e.estimatedTokens || "-",
+            peak ? "Peak" : "Off",
+            Number(e.burnScore).toFixed(3),
+          ];
+
+          for (const value of values) {
+            const cell = document.createElement("td");
+            cell.textContent = String(value);
+            row.appendChild(cell);
+          }
+
+          body.appendChild(row);
+        }
       }
 
       function renderHistory() {
