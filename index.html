@@ -224,8 +224,9 @@
 
     <script>
       const STORAGE_KEY = "cheapestclaude.events.v1";
-      const SUNDAY = 0;
-      const SATURDAY = 6;
+      const DAY_SUNDAY = 0;
+      const DAY_MONDAY = 1;
+      const DAY_FRIDAY = 5;
       // Directional MVP assumption: local weekday business hours are usually busiest.
       const PEAK_HOURS = new Set([9, 10, 11, 12, 13, 14, 15, 16, 17]);
       // 120 tokens approximates short prompt+response overhead so tiny prompts do not look free.
@@ -234,6 +235,9 @@
       const TOKEN_NORMALIZER = 1000;
       // 5 samples is a practical MVP threshold to balance early guidance vs noisy one-off events.
       const FULL_CONFIDENCE_SAMPLE_COUNT = 5;
+      const FALLBACK_BASELINE_BURN = 0.9;
+      const FALLBACK_PEAK_BURN = 1.2;
+      const FALLBACK_OFFPEAK_BURN = 0.75;
       const events = loadEvents();
 
       document.getElementById("csvFile").addEventListener("change", onCsvUpload);
@@ -259,7 +263,7 @@
 
       function isPeak(date) {
         const day = date.getDay();
-        return day > SUNDAY && day < SATURDAY && PEAK_HOURS.has(date.getHours());
+        return day >= DAY_MONDAY && day <= DAY_FRIDAY && PEAK_HOURS.has(date.getHours());
       }
 
       function estimateBurn({ timestamp, model, estimatedTokens, peakFlag, burnScore }) {
@@ -291,7 +295,7 @@
           const burnScore = Number(cols[idx("burn_score")] || "");
           const event = { timestamp, timezone, sessionId, model, estimatedTokens, peakFlag, burnScore };
           return { ...event, burnScore: estimateBurn(event) };
-        }).filter((e) => e && !Number.isNaN(new Date(e.timestamp).getTime()));
+        }).filter((e) => e !== null).filter((e) => !Number.isNaN(new Date(e.timestamp).getTime()));
       }
 
       function onCsvUpload(e) {
@@ -340,7 +344,7 @@
       function getUpcomingCheapWindows(hourly) {
         const now = new Date();
         const baseline = hourly.filter((h) => h.avg !== null).map((h) => h.avg);
-        const fallback = 0.9;
+        const fallback = FALLBACK_BASELINE_BURN;
         const min = baseline.length ? Math.min(...baseline) : fallback;
         const threshold = min * 1.2;
         const result = [];
@@ -348,7 +352,7 @@
           const dt = new Date(now);
           dt.setHours(now.getHours() + i, 0, 0, 0);
           const h = hourly[dt.getHours()];
-          const avg = h.avg === null ? (isPeak(dt) ? 1.2 : 0.75) : h.avg;
+          const avg = h.avg === null ? (isPeak(dt) ? FALLBACK_PEAK_BURN : FALLBACK_OFFPEAK_BURN) : h.avg;
           if (avg <= threshold) {
             result.push({ label: dt.toLocaleString([], { weekday: "short", hour: "numeric" }), avg, confidence: h.confidence });
           }
@@ -361,8 +365,8 @@
         const now = new Date();
         const current = hourly[now.getHours()];
         const allKnown = hourly.filter((h) => h.avg !== null).map((h) => h.avg);
-        const best = allKnown.length ? Math.min(...allKnown) : 0.75;
-        const currentEstimate = current.avg === null ? (isPeak(now) ? 1.2 : 0.75) : current.avg;
+        const best = allKnown.length ? Math.min(...allKnown) : FALLBACK_OFFPEAK_BURN;
+        const currentEstimate = current.avg === null ? (isPeak(now) ? FALLBACK_PEAK_BURN : FALLBACK_OFFPEAK_BURN) : current.avg;
         if (currentEstimate <= best * 1.1) return { text: "prompt now", cls: "ok" };
         if (currentEstimate <= best * 1.35) return { text: "wait for cheaper window", cls: "warn" };
         return { text: "high burn", cls: "bad" };
@@ -418,7 +422,7 @@
         ctx.stroke();
 
         hourly.forEach((h, i) => {
-          const value = h.avg === null ? (PEAK_HOURS.has(i) ? 1.1 : 0.7) : h.avg;
+          const value = h.avg === null ? (PEAK_HOURS.has(i) ? FALLBACK_PEAK_BURN : FALLBACK_OFFPEAK_BURN) : h.avg;
           const height = ((value / max) * (chartBottom - chartTop));
           const x = chartLeft + i * (barW + 2);
           const y = chartBottom - height;
@@ -436,7 +440,7 @@
         const hourly = aggregateHourly();
         const recommendation = getRecommendation(hourly);
         const nowHour = hourly[now.getHours()];
-        const inferredNow = nowHour.avg === null ? (isPeak(now) ? 1.2 : 0.75) : nowHour.avg;
+        const inferredNow = nowHour.avg === null ? (isPeak(now) ? FALLBACK_PEAK_BURN : FALLBACK_OFFPEAK_BURN) : nowHour.avg;
         const confidence = nowHour.confidence || 0;
         const upcoming = getUpcomingCheapWindows(hourly);
 
