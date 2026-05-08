@@ -1,0 +1,558 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CheapestClaude</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f7f9fc;
+        --card: #ffffff;
+        --ink: #1f2937;
+        --muted: #6b7280;
+        --accent: #2563eb;
+        --ok: #059669;
+        --warn: #d97706;
+        --bad: #dc2626;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        background: var(--bg);
+        color: var(--ink);
+      }
+      main {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 1rem;
+      }
+      .grid {
+        display: grid;
+        gap: 1rem;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      }
+      .card {
+        background: var(--card);
+        border-radius: 12px;
+        padding: 1rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+      }
+      h1,
+      h2,
+      h3 {
+        margin: 0 0 0.5rem;
+      }
+      h1 {
+        font-size: 1.8rem;
+      }
+      .sub {
+        color: var(--muted);
+        margin-top: 0;
+      }
+      .status {
+        font-weight: 700;
+        padding: 0.4rem 0.6rem;
+        border-radius: 999px;
+        display: inline-block;
+      }
+      .status.ok {
+        background: #dcfce7;
+        color: var(--ok);
+      }
+      .status.warn {
+        background: #fef3c7;
+        color: var(--warn);
+      }
+      .status.bad {
+        background: #fee2e2;
+        color: var(--bad);
+      }
+      .row {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+      label,
+      input,
+      button,
+      select {
+        font: inherit;
+      }
+      input,
+      select,
+      button {
+        border: 1px solid #d1d5db;
+        border-radius: 8px;
+        padding: 0.45rem 0.6rem;
+        background: #fff;
+      }
+      button {
+        background: var(--accent);
+        color: #fff;
+        border: none;
+        cursor: pointer;
+      }
+      button:hover {
+        opacity: 0.92;
+      }
+      ul {
+        margin: 0;
+        padding-left: 1.2rem;
+      }
+      .tiny {
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+      .list {
+        max-height: 220px;
+        overflow: auto;
+      }
+      .list table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.92rem;
+      }
+      .list th,
+      .list td {
+        border-bottom: 1px solid #edf0f5;
+        padding: 0.4rem 0.2rem;
+        text-align: left;
+      }
+      canvas {
+        width: 100%;
+        height: 220px;
+        background: linear-gradient(#fff, #fbfdff);
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="card">
+        <h1>CheapestClaude</h1>
+        <p class="sub">
+          Estimate relative Claude usage burn and find cheaper prompt windows.
+        </p>
+      </section>
+
+      <section class="grid">
+        <article class="card">
+          <h2>Current Status</h2>
+          <p><strong>Now:</strong> <span id="nowTime">-</span></p>
+          <p><strong>Burn level:</strong> <span id="burnNow">-</span></p>
+          <p><strong>Recommendation:</strong> <span id="recommendation" class="status warn">-</span></p>
+          <p class="tiny" id="confidenceText">Confidence: low (limited history)</p>
+        </article>
+
+        <article class="card">
+          <h2>Data Input</h2>
+          <div class="row">
+            <label for="csvFile">Import CSV:</label>
+            <input id="csvFile" type="file" accept=".csv,text/csv" />
+          </div>
+          <p class="tiny">
+            CSV columns: timestamp, timezone, session_id, model, estimated_tokens,
+            peak_flag, burn_score
+          </p>
+          <p class="tiny">Peak/off-peak defaults use your local timezone and weekdays 9:00-17:59 as peak.</p>
+          <div class="row">
+            <input id="manualTokens" type="number" min="1" placeholder="tokens" />
+            <select id="manualModel">
+              <option>claude-3-5-sonnet</option>
+              <option>claude-3-opus</option>
+              <option>claude-3-haiku</option>
+            </select>
+            <button id="logPrompt">Log prompt now</button>
+          </div>
+        </article>
+      </section>
+
+      <section class="grid">
+        <article class="card">
+          <h2>Cheapest-Time Graph (hourly avg burn)</h2>
+          <canvas id="hourlyChart" width="900" height="260"></canvas>
+          <p class="tiny" id="chartCaption">No usage data yet. Import CSV or log prompts.</p>
+        </article>
+        <article class="card">
+          <h2>Upcoming Cheap Windows</h2>
+          <ul id="upcoming"></ul>
+        </article>
+      </section>
+
+      <section class="grid">
+        <article class="card">
+          <h3>Usage Timeline</h3>
+          <div class="list">
+            <table>
+              <thead>
+                <tr>
+                  <th>Timestamp</th>
+                  <th>Model</th>
+                  <th>Tokens</th>
+                  <th>Peak</th>
+                  <th>Burn</th>
+                </tr>
+              </thead>
+              <tbody id="timelineBody"></tbody>
+            </table>
+          </div>
+        </article>
+        <article class="card">
+          <h3>Session History (recent days)</h3>
+          <div class="list">
+            <table>
+              <thead>
+                <tr>
+                  <th>Day</th>
+                  <th>Prompts</th>
+                  <th>Total Burn</th>
+                  <th>Avg Burn</th>
+                </tr>
+              </thead>
+              <tbody id="historyBody"></tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+    </main>
+
+    <script>
+      const STORAGE_KEY = "cheapestclaude.events.v1";
+      const DAY_SUNDAY = 0;
+      const DAY_MONDAY = 1;
+      const DAY_FRIDAY = 5;
+      // Directional MVP assumption: local weekday business hours are usually busiest.
+      const PEAK_HOURS = new Set([9, 10, 11, 12, 13, 14, 15, 16, 17]);
+      // 120 tokens approximates short prompt+response overhead so tiny prompts do not look free.
+      const MIN_TOKEN_FLOOR = 120;
+      // Burn estimate is normalized per 1k tokens for easier comparison.
+      const TOKEN_NORMALIZER = 1000;
+      // 5 samples is a practical MVP threshold to balance early guidance vs noisy one-off events.
+      const FULL_CONFIDENCE_SAMPLE_COUNT = 5;
+      const FALLBACK_BASELINE_BURN = 0.9;
+      const FALLBACK_PEAK_BURN = 1.2;
+      const FALLBACK_OFFPEAK_BURN = 0.75;
+      const events = loadEvents();
+
+      document.getElementById("csvFile").addEventListener("change", onCsvUpload);
+      document.getElementById("logPrompt").addEventListener("click", onManualLog);
+
+      function loadEvents() {
+        try {
+          return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+        } catch {
+          return [];
+        }
+      }
+
+      function persist() {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(events));
+      }
+
+      function modelMultiplier(model) {
+        if ((model || "").includes("opus")) return 1.5;
+        if ((model || "").includes("haiku")) return 0.7;
+        return 1;
+      }
+
+      function isPeak(date) {
+        const day = date.getDay();
+        return day >= DAY_MONDAY && day <= DAY_FRIDAY && PEAK_HOURS.has(date.getHours());
+      }
+
+      function estimateBurn({ timestamp, model, estimatedTokens, peakFlag, burnScore }) {
+        if (Number.isFinite(Number(burnScore)) && Number(burnScore) > 0) {
+          return Number(burnScore);
+        }
+        const dt = new Date(timestamp);
+        const peak = typeof peakFlag === "boolean" ? peakFlag : isPeak(dt);
+        const tokenPart = Math.max(estimatedTokens || 0, MIN_TOKEN_FLOOR) / TOKEN_NORMALIZER;
+        const peakPart = peak ? 1.4 : 0.8;
+        return Number((tokenPart * peakPart * modelMultiplier(model)).toFixed(3));
+      }
+
+      function parseCsv(text) {
+        const rows = text.split(/\r?\n/).filter(Boolean);
+        if (rows.length < 2) return [];
+        const headers = rows[0].split(",").map((h) => h.trim().toLowerCase());
+        const idx = (name) => headers.indexOf(name);
+        return rows.slice(1).map((line) => {
+          const cols = line.split(",").map((c) => c.trim());
+          const timestamp = cols[idx("timestamp")];
+          if (!timestamp) return null;
+          const timezone = cols[idx("timezone")] || Intl.DateTimeFormat().resolvedOptions().timeZone;
+          const sessionId = cols[idx("session_id")] || "manual";
+          const model = cols[idx("model")] || "claude-3-5-sonnet";
+          const estimatedTokens = Number(cols[idx("estimated_tokens")] || 0);
+          const peakRaw = cols[idx("peak_flag")] || "";
+          const peakFlag = peakRaw ? ["true", "1", "yes", "y"].includes(peakRaw.toLowerCase()) : undefined;
+          const burnScore = Number(cols[idx("burn_score")] || "");
+          const event = { timestamp, timezone, sessionId, model, estimatedTokens, peakFlag, burnScore };
+          return { ...event, burnScore: estimateBurn(event) };
+        }).filter((e) => e !== null).filter((e) => !Number.isNaN(new Date(e.timestamp).getTime()));
+      }
+
+      function getEventDedupKey({ timestamp, sessionId, model, estimatedTokens }) {
+        return [
+          String(timestamp || ""),
+          String(sessionId || ""),
+          String(model || ""),
+          String(Number(estimatedTokens) || 0),
+        ].join("|");
+      }
+
+      function mergeUniqueEvents(existingEvents, incomingEvents) {
+        const seen = new Set(existingEvents.map((event) => getEventDedupKey(event)));
+        incomingEvents.forEach((event) => {
+          const key = getEventDedupKey(event);
+          if (seen.has(key)) return;
+          seen.add(key);
+          existingEvents.push(event);
+        });
+      }
+
+      function onCsvUpload(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          const importedEvents = parseCsv(String(reader.result));
+          mergeUniqueEvents(events, importedEvents);
+          events.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+          persist();
+          render();
+        };
+        reader.readAsText(file);
+      }
+
+      function onManualLog() {
+        const tokens = Number(document.getElementById("manualTokens").value || 500);
+        const model = document.getElementById("manualModel").value;
+        const event = {
+          timestamp: new Date().toISOString(),
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          sessionId: "manual",
+          model,
+          estimatedTokens: tokens,
+        };
+        events.push({ ...event, burnScore: estimateBurn(event), peakFlag: isPeak(new Date(event.timestamp)) });
+        persist();
+        render();
+      }
+
+      function aggregateHourly() {
+        const byHour = Array.from({ length: 24 }, (_, hour) => ({ hour, total: 0, count: 0 }));
+        for (const event of events) {
+          const d = new Date(event.timestamp);
+          const entry = byHour[d.getHours()];
+          entry.total += Number(event.burnScore || estimateBurn(event));
+          entry.count += 1;
+        }
+        return byHour.map((h) => ({
+          ...h,
+          avg: h.count ? h.total / h.count : null,
+          confidence: Math.min(1, h.count / FULL_CONFIDENCE_SAMPLE_COUNT),
+        }));
+      }
+
+      function getUpcomingCheapWindows(hourly) {
+        const now = new Date();
+        const baseline = hourly.filter((h) => h.avg !== null).map((h) => h.avg);
+        const fallback = FALLBACK_BASELINE_BURN;
+        const min = baseline.length ? Math.min(...baseline) : fallback;
+        const threshold = min * 1.2;
+        const result = [];
+        for (let i = 0; i < 24; i += 1) {
+          const dt = new Date(now);
+          dt.setHours(now.getHours() + i, 0, 0, 0);
+          const h = hourly[dt.getHours()];
+          const avg = h.avg === null ? (isPeak(dt) ? FALLBACK_PEAK_BURN : FALLBACK_OFFPEAK_BURN) : h.avg;
+          if (avg <= threshold) {
+            result.push({ label: dt.toLocaleString([], { weekday: "short", hour: "numeric" }), avg, confidence: h.confidence });
+          }
+          if (result.length >= 6) break;
+        }
+        return result;
+      }
+
+      function getRecommendation(hourly) {
+        const now = new Date();
+        const current = hourly[now.getHours()];
+        const allKnown = hourly.filter((h) => h.avg !== null).map((h) => h.avg);
+        const best = allKnown.length ? Math.min(...allKnown) : FALLBACK_OFFPEAK_BURN;
+        const currentEstimate = current.avg === null ? (isPeak(now) ? FALLBACK_PEAK_BURN : FALLBACK_OFFPEAK_BURN) : current.avg;
+        if (currentEstimate <= best * 1.1) return { text: "prompt now", cls: "ok" };
+        if (currentEstimate <= best * 1.35) return { text: "wait for cheaper window", cls: "warn" };
+        return { text: "high burn", cls: "bad" };
+      }
+
+      function renderTimeline() {
+        const body = document.getElementById("timelineBody");
+        const recent = [...events].reverse().slice(0, 40);
+        body.replaceChildren();
+
+        if (!recent.length) {
+          const row = document.createElement("tr");
+          const cell = document.createElement("td");
+          cell.colSpan = 5;
+          cell.className = "tiny";
+          cell.textContent = "No events yet.";
+          row.appendChild(cell);
+          body.appendChild(row);
+          return;
+        }
+
+        for (const e of recent) {
+          const d = new Date(e.timestamp);
+          const peak = typeof e.peakFlag === "boolean" ? e.peakFlag : isPeak(d);
+          const row = document.createElement("tr");
+          const values = [
+            d.toLocaleString(),
+            e.model ?? "",
+            e.estimatedTokens || "-",
+            peak ? "Peak" : "Off",
+            Number(e.burnScore).toFixed(3),
+          ];
+
+          for (const value of values) {
+            const cell = document.createElement("td");
+            cell.textContent = String(value);
+            row.appendChild(cell);
+          }
+
+          body.appendChild(row);
+        }
+      }
+
+      function renderHistory() {
+        const byDay = new Map();
+        for (const e of events) {
+          const day = new Date(e.timestamp).toISOString().slice(0, 10);
+          const row = byDay.get(day) || { day, count: 0, burn: 0 };
+          const burn = e.burnScore != null ? Number(e.burnScore) : estimateBurn(e);
+          row.count += 1;
+          row.burn += burn;
+          byDay.set(day, row);
+        }
+        const rows = [...byDay.values()].sort((a, b) => b.day.localeCompare(a.day)).slice(0, 10);
+        const historyBody = document.getElementById("historyBody");
+        historyBody.textContent = "";
+
+        if (!rows.length) {
+          const tr = document.createElement("tr");
+          const td = document.createElement("td");
+          td.colSpan = 4;
+          td.className = "tiny";
+          td.textContent = "Not enough data yet.";
+          tr.appendChild(td);
+          historyBody.appendChild(tr);
+          return;
+        }
+
+        rows.forEach((r) => {
+          const tr = document.createElement("tr");
+          const values = [
+            r.day,
+            String(r.count),
+            r.burn.toFixed(3),
+            (r.burn / r.count).toFixed(3)
+          ];
+
+          values.forEach((value) => {
+            const td = document.createElement("td");
+            td.textContent = value;
+            tr.appendChild(td);
+          });
+
+          historyBody.appendChild(tr);
+        });
+      }
+
+      function drawChart(hourly) {
+        const canvas = document.getElementById("hourlyChart");
+        const ctx = canvas.getContext("2d");
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const values = hourly.map((h) => (h.avg === null ? 0 : h.avg));
+        const max = Math.max(...values, 1);
+        const minKnown = Math.min(...hourly.filter((h) => h.avg !== null).map((h) => h.avg), max);
+        const chartLeft = 40;
+        const chartBottom = canvas.height - 25;
+        const chartTop = 15;
+        const chartWidth = canvas.width - chartLeft - 8;
+        const barW = chartWidth / 24 - 2;
+
+        ctx.fillStyle = "#9ca3af";
+        ctx.font = "12px system-ui";
+        ctx.fillText("0", 8, chartBottom + 4);
+        ctx.fillText(max.toFixed(2), 2, chartTop + 2);
+        ctx.strokeStyle = "#e5e7eb";
+        ctx.beginPath();
+        ctx.moveTo(chartLeft, chartTop);
+        ctx.lineTo(chartLeft, chartBottom);
+        ctx.lineTo(canvas.width - 8, chartBottom);
+        ctx.stroke();
+
+        hourly.forEach((h, i) => {
+          const value = h.avg === null ? (PEAK_HOURS.has(i) ? FALLBACK_PEAK_BURN : FALLBACK_OFFPEAK_BURN) : h.avg;
+          const height = ((value / max) * (chartBottom - chartTop));
+          const x = chartLeft + i * (barW + 2);
+          const y = chartBottom - height;
+          ctx.fillStyle = value <= minKnown * 1.2 ? "#16a34a" : value >= minKnown * 1.8 ? "#dc2626" : "#f59e0b";
+          ctx.fillRect(x, y, barW, height);
+          if (i % 3 === 0) {
+            ctx.fillStyle = "#6b7280";
+            ctx.fillText(String(i), x, chartBottom + 14);
+          }
+        });
+      }
+
+      function render() {
+        const now = new Date();
+        const hourly = aggregateHourly();
+        const recommendation = getRecommendation(hourly);
+        const nowHour = hourly[now.getHours()];
+        const inferredNow = nowHour.avg === null ? (isPeak(now) ? FALLBACK_PEAK_BURN : FALLBACK_OFFPEAK_BURN) : nowHour.avg;
+        const confidence = nowHour.confidence || 0;
+        const upcoming = getUpcomingCheapWindows(hourly);
+
+        document.getElementById("nowTime").textContent = now.toLocaleString();
+        document.getElementById("burnNow").textContent = `${isPeak(now) ? "Peak" : "Off-peak"} (${inferredNow.toFixed(3)} est.)`;
+        const recEl = document.getElementById("recommendation");
+        recEl.textContent = recommendation.text;
+        recEl.className = `status ${recommendation.cls}`;
+        document.getElementById("confidenceText").textContent = `Confidence: ${confidence > 0.65 ? "high" : confidence > 0.35 ? "medium" : "low"} (${Math.round(confidence * 100)}%)`;
+        const upcomingEl = document.getElementById("upcoming");
+        upcomingEl.replaceChildren();
+        if (!upcoming.length) {
+          const li = document.createElement("li");
+          li.textContent = "No low-burn window predicted yet.";
+          upcomingEl.appendChild(li);
+        } else {
+          upcoming.forEach((w) => {
+            const li = document.createElement("li");
+            const strong = document.createElement("strong");
+            strong.textContent = w.label;
+            li.appendChild(strong);
+            li.appendChild(document.createTextNode(` — est burn ${w.avg.toFixed(3)} (confidence ${Math.round(w.confidence * 100)}%)`));
+            upcomingEl.appendChild(li);
+          });
+        }
+        document.getElementById("chartCaption").textContent = events.length
+          ? "Green bars indicate cheapest predicted windows."
+          : "No usage data yet. Import CSV or log prompts.";
+
+        drawChart(hourly);
+        renderTimeline();
+        renderHistory();
+      }
+
+      render();
+    </script>
+  </body>
+</html>
