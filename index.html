@@ -228,11 +228,11 @@
       const SATURDAY = 6;
       // Directional MVP assumption: local weekday business hours are usually busiest.
       const PEAK_HOURS = new Set([9, 10, 11, 12, 13, 14, 15, 16, 17]);
-      // Small prompts still have overhead; floor avoids unrealistically tiny burn estimates.
+      // 120 tokens approximates short prompt+response overhead so tiny prompts do not look free.
       const MIN_TOKEN_FLOOR = 120;
       // Burn estimate is normalized per 1k tokens for easier comparison.
       const TOKEN_NORMALIZER = 1000;
-      // Confidence reaches 100% once an hour has at least 5 observed samples.
+      // 5 samples is a practical MVP threshold to balance early guidance vs noisy one-off events.
       const FULL_CONFIDENCE_SAMPLE_COUNT = 5;
       const events = loadEvents();
 
@@ -258,7 +258,8 @@
       }
 
       function isPeak(date) {
-        return date.getDay() > SUNDAY && date.getDay() < SATURDAY && PEAK_HOURS.has(date.getHours());
+        const day = date.getDay();
+        return day > SUNDAY && day < SATURDAY && PEAK_HOURS.has(date.getHours());
       }
 
       function estimateBurn({ timestamp, model, estimatedTokens, peakFlag, burnScore }) {
@@ -279,7 +280,8 @@
         const idx = (name) => headers.indexOf(name);
         return rows.slice(1).map((line) => {
           const cols = line.split(",").map((c) => c.trim());
-          const timestamp = cols[idx("timestamp")] || new Date().toISOString();
+          const timestamp = cols[idx("timestamp")];
+          if (!timestamp) return null;
           const timezone = cols[idx("timezone")] || Intl.DateTimeFormat().resolvedOptions().timeZone;
           const sessionId = cols[idx("session_id")] || "manual";
           const model = cols[idx("model")] || "claude-3-5-sonnet";
@@ -289,7 +291,7 @@
           const burnScore = Number(cols[idx("burn_score")] || "");
           const event = { timestamp, timezone, sessionId, model, estimatedTokens, peakFlag, burnScore };
           return { ...event, burnScore: estimateBurn(event) };
-        }).filter((e) => !Number.isNaN(new Date(e.timestamp).getTime()));
+        }).filter((e) => e && !Number.isNaN(new Date(e.timestamp).getTime()));
       }
 
       function onCsvUpload(e) {
